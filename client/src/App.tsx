@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { BarChart, TrendingUp, Users, MessageSquare, Heart, Gift, Ban, Radio, MessageCircle } from 'lucide-react';
+import { TrendingUp, Users, MessageSquare, Heart, Gift, Ban, Radio } from 'lucide-react';
 import StatCard from './components/StatCard';
 import RecentActivity from './components/RecentActivity';
 import TopUsers from './components/TopUsers';
+import GiftedSubscriptionsDetail from './components/GiftedSubscriptionsDetail';
 import ChannelSelector from './components/ChannelSelector';
 
+// Define la interfaz de Stats fuera del componente
 interface Stats {
   channelName: string;
   totalMessages: number;
@@ -14,65 +16,80 @@ interface Stats {
   giftedSubscriptions: number;
   kicks: number;
   usersBanned: number;
-  hostChannels: number;
-  polls: number;
-  pinnedMessages: number;
-  topUsers: Array<{ username: string; count: number }>;
   uptime: number;
   messagesPerMinute: number;
-  averageMessageLength: number;
-  messageHistory: Array<{ username: string; message: string; timestamp: string }>;
-  subscriptionHistory: Array<{ username: string; type: string; timestamp: string }>;
-  banHistory: Array<{ username: string; timestamp: string }>;
-  kicksGiftedHistory: Array<{ from: string; amount: number; timestamp: string }>;
+  // Propiedades que solo existen en tiempo real y son opcionales
+  topUsers?: Array<{ username: string; count: number }>;
+  messageHistory?: Array<{ username: string; message: string; timestamp: string }>;
+  subscriptionHistory?: Array<{ username: string; type: string; timestamp: string }>;
+  kicksGiftedHistory?: Array<{ from: string; amount: number; timestamp: string }>;
 }
+
+const getTodayDateString = () => new Date().toISOString().split('T')[0];
 
 const App = () => {
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [stats, setStats] = useState<Stats | null>(null);
+  const [liveStats, setLiveStats] = useState<Stats | null>(null);
+  const [historicalStats, setHistoricalStats] = useState<Stats | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayDateString());
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [connected, setConnected] = useState(false);
-  const [channelError, setChannelError] = useState<string>('');
 
+  const isRealTime = selectedDate === getTodayDateString();
+  const displayStats = isRealTime ? liveStats : historicalStats;
+
+  // Efecto para la conexión del socket (se ejecuta una sola vez)
   useEffect(() => {
     const newSocket = io('http://localhost:3000');
-
-    newSocket.on('connect', () => {
-      console.log('Conectado al servidor');
-      setConnected(true);
-    });
-
-    newSocket.on('stats_update', (data) => {
-      setStats(data);
-    });
-
-    newSocket.on('channel_connected', (data) => {
-      console.log('Conectado al canal:', data.channel);
-      setChannelError('');
-    });
-
-    newSocket.on('channel_error', (data) => {
-      console.error('Error en canal:', data.error);
-      setChannelError(`Error: ${data.error}`);
-      setSelectedChannel(''); // Reset to channel selector
-    });
-
-    newSocket.on('disconnect', () => {
-      console.log('Desconectado del servidor');
-      setConnected(false);
-    });
-
     setSocket(newSocket);
 
-    return () => {
-      newSocket.disconnect();
-    };
+    newSocket.on('connect', () => setConnected(true));
+    newSocket.on('disconnect', () => setConnected(false));
+    newSocket.on('stats_update', (data) => setLiveStats(data));
+    
+    newSocket.on('channel_connected', () => {
+      setIsLoading(false);
+      setError('');
+    });
+    
+    newSocket.on('channel_error', (data) => {
+      setError(data.error || 'Error desconocido');
+      setIsLoading(false);
+    });
+
+    return () => newSocket.disconnect();
   }, []);
 
-  const handleChannelSelect = (channel: string) => {
-    setSelectedChannel(channel);
-    if (socket) {
-      socket.emit('connect_channel', { channel });
+  // Efecto para conectar al canal y buscar datos
+  useEffect(() => {
+    if (!socket || !selectedChannel) return;
+
+    // 1. Resetear estados al cambiar canal o fecha
+    setIsLoading(true);
+    setError('');
+    setLiveStats(null);
+    setHistoricalStats(null);
+
+    // 2. Decidir si conectar en tiempo real o buscar en historial
+    if (isRealTime) {
+      socket.emit('connect_channel', { channel: selectedChannel });
+    } else {
+      fetchHistoricalData(selectedChannel, selectedDate);
+    }
+  }, [socket, selectedChannel, selectedDate]);
+
+  const fetchHistoricalData = async (channel: string, date: string) => {
+    try {
+      const response = await fetch(`http://localhost:3000/history/${channel}/${date}`);
+      if (!response.ok) throw new Error('No hay datos para el día seleccionado.');
+      const data = await response.json();
+      setHistoricalStats(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -82,8 +99,6 @@ const App = () => {
     const secs = seconds % 60;
     return `${hours}h ${minutes}m ${secs}s`;
   };
-
-  console.log('App render - selectedChannel:', selectedChannel, 'stats:', stats);
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -97,7 +112,7 @@ const App = () => {
               </div>
               <div>
                 <h1 className="text-4xl font-bold">Kick Dashboard</h1>
-                <p className="text-purple-200">Estadísticas en Tiempo Real</p>
+                <p className="text-purple-200">Estadísticas {isRealTime ? 'en Tiempo Real' : `del ${selectedDate}`}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -111,130 +126,66 @@ const App = () => {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         {!selectedChannel ? (
-          <div>
-            <p className="text-yellow-400 mb-4">DEBUG: selectedChannel is empty, showing ChannelSelector</p>
-            <ChannelSelector onSelectChannel={handleChannelSelect} connectionError={channelError} />
-          </div>
+          <ChannelSelector onSelectChannel={setSelectedChannel} connectionError={error} />
         ) : (
           <>
-            {stats && (
-              <>
-                {/* Channel Header */}
-                <div className="mb-8 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-3xl font-bold text-capitalize">{stats.channelName}</h2>
-                    <p className="text-gray-400 text-sm mt-2">Tiempo en línea: {formatUptime(stats.uptime)}</p>
-                  </div>
-                  <button
-                    onClick={() => setSelectedChannel('')}
-                    className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-                  >
-                    Cambiar canal
-                  </button>
-                </div>
+            {/* Channel Header */}
+            <div className="mb-8 flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-bold capitalize">{selectedChannel}</h2>
+                {displayStats && <p className="text-gray-400 text-sm mt-2">Tiempo en línea: {formatUptime(displayStats.uptime)}</p>}
+              </div>
+              <div className="flex items-center gap-4">
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="bg-gray-800 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                />
+                <button
+                  onClick={() => setSelectedChannel('')}
+                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  Cambiar canal
+                </button>
+              </div>
+            </div>
 
+            {isLoading && <div className="text-center py-16"><p className="text-xl text-gray-400">Cargando datos para {selectedChannel}...</p></div>}
+            {error && <div className="text-center py-16"><p className="text-xl text-red-400">{error}</p></div>}
+
+            {displayStats && !isLoading && !error && (
+              <>
                 {/* Main Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  <StatCard
-                    icon={<MessageSquare className="w-6 h-6" />}
-                    label="Mensajes Totales"
-                    value={stats.totalMessages}
-                    trend={`${stats.messagesPerMinute}/min`}
-                  />
-                  <StatCard
-                    icon={<Users className="w-6 h-6" />}
-                    label="Usuarios Únicos"
-                    value={stats.uniqueUsers}
-                    color="text-blue-400"
-                  />
-                  <StatCard
-                    icon={<Heart className="w-6 h-6" />}
-                    label="Suscriptores"
-                    value={stats.subscriptions}
-                    color="text-red-400"
-                  />
-                  <StatCard
-                    icon={<Gift className="w-6 h-6" />}
-                    label="Regalos"
-                    value={stats.kicks}
-                    color="text-yellow-400"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                  <StatCard icon={<MessageSquare className="w-6 h-6" />} label="Mensajes Totales" value={displayStats.totalMessages} trend={isRealTime ? `${displayStats.messagesPerMinute}/min` : undefined} />
+                  <StatCard icon={<Users className="w-6 h-6" />} label="Usuarios Únicos" value={displayStats.uniqueUsers} color="text-blue-400" />
+                  <StatCard icon={<Ban className="w-6 h-6" />} label="Usuarios Baneados" value={displayStats.usersBanned} color="text-red-600" />
                 </div>
 
                 {/* Second Row Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-                  <StatCard
-                    icon={<TrendingUp className="w-6 h-6" />}
-                    label="Suscripciones Regaladas"
-                    value={stats.giftedSubscriptions}
-                    color="text-green-400"
-                  />
-                  <StatCard
-                    icon={<Ban className="w-6 h-6" />}
-                    label="Usuarios Baneados"
-                    value={stats.usersBanned}
-                    color="text-red-600"
-                  />
-                  <StatCard
-                    icon={<Radio className="w-6 h-6" />}
-                    label="Host Channels"
-                    value={stats.hostChannels}
-                    color="text-purple-400"
-                  />
-                  <StatCard
-                    icon={<BarChart className="w-6 h-6" />}
-                    label="Encuestas"
-                    value={stats.polls}
-                    color="text-cyan-400"
-                  />
-                  <StatCard
-                    icon={<MessageCircle className="w-6 h-6" />}
-                    label="Mensajes Fijados"
-                    value={stats.pinnedMessages}
-                    color="text-orange-400"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  <StatCard icon={<Heart className="w-6 h-6" />} label="Suscriptores" value={displayStats.subscriptions} color="text-red-400" />
+                  <StatCard icon={<TrendingUp className="w-6 h-6" />} label="Suscripciones Regaladas" value={displayStats.giftedSubscriptions} color="text-green-400" />
+                  <StatCard icon={<Gift className="w-6 h-6" />} label="Regalos" value={displayStats.kicks} color="text-yellow-400" />
                 </div>
 
-                {/* Details Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                  <StatCard
-                    icon={<MessageSquare className="w-6 h-6" />}
-                    label="Longitud Promedio de Mensaje"
-                    value={`${stats.averageMessageLength} caracteres`}
-                    className="lg:col-span-1"
-                    color="text-cyan-400"
-                  />
-                </div>
+                {/* Suscripciones y Regalos Grid (solo en tiempo real) */}
+                {isRealTime && displayStats.subscriptionHistory && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                    <RecentActivity title="Últimas Suscripciones" items={displayStats.subscriptionHistory.slice(0, 5)} icon={<Heart className="w-4 h-4" />} />
+                    <GiftedSubscriptionsDetail items={displayStats.kicksGiftedHistory || []} />
+                    <RecentActivity title="Últimos Regalos" items={displayStats.kicksGiftedHistory?.slice(0, 5) || []} icon={<TrendingUp className="w-4 h-4" />} />
+                  </div>
+                )}
 
-                {/* Charts and Details */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                  <div className="lg:col-span-2">
-                    <TopUsers users={stats.topUsers} />
+                {/* Top Users y Últimos Mensajes (solo en tiempo real) */}
+                {isRealTime && displayStats.topUsers && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <TopUsers users={displayStats.topUsers} />
+                    <RecentActivity title="Últimos Mensajes" items={displayStats.messageHistory?.slice(0, 8) || []} icon={<MessageSquare className="w-4 h-4" />} />
                   </div>
-                  <div>
-                    <RecentActivity
-                      title="Últimas Suscripciones"
-                      items={stats.subscriptionHistory.slice(0, 5)}
-                      icon={<Heart className="w-4 h-4" />}
-                    />
-                  </div>
-                </div>
-
-                {/* Recent Activity Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  <RecentActivity
-                    title="Últimos Mensajes"
-                    items={stats.messageHistory.slice(0, 8)}
-                    icon={<MessageSquare className="w-4 h-4" />}
-                  />
-                  <div>
-                    <RecentActivity
-                      title="Actividad de Regalos"
-                      items={stats.kicksGiftedHistory.slice(0, 5)}
-                      icon={<Gift className="w-4 h-4" />}
-                    />
-                  </div>
-                </div>
+                )}
               </>
             )}
           </>

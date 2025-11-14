@@ -25,13 +25,13 @@ if errorlevel 1 (
 
 echo.
 echo Iniciando servidor backend en puerto 3000...
-start "Backend - Kick Dashboard" cmd /k "npm run dev"
+start "Backend" cmd /c "node dist/server.js & pause"
 
 timeout /t 4 /nobreak
 
 echo.
 echo Iniciando cliente frontend en puerto 5173...
-start "Frontend - Kick Dashboard" cmd /k "cd client && npm run dev"
+start "Frontend" cmd /c "cd client && npm run dev & pause"
 
 echo.
 echo ========================================

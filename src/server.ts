@@ -10,7 +10,9 @@ import zlib from 'zlib';
 import puppeteer from 'puppeteer';
 import puppeteerExtra from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { initializeDatabase, saveDailyStats, getDailyStatsForDate } from './database.js';
 
+try{ 
 // Helper to fetch channel info with proper headers
 async function fetchChannelInfo(channelName: string): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -271,6 +273,7 @@ interface ChannelStats {
 const channelStats = new Map<string, ChannelStats>();
 const kickWSInstances = new Map<string, KickWebSocket>();
 let updateInterval: NodeJS.Timeout | null = null;
+let dailySaveInterval: NodeJS.Timeout | null = null;
 
 function initializeStats(channelName: string): ChannelStats {
   return {
@@ -532,9 +535,23 @@ io.on('connection', (socket) => {
 
   socket.on('connect_channel', (data: { channel: string }) => {
     const channel = data.channel.toLowerCase();
+
+    // Si ya está conectado, notificar al cliente inmediatamente y enviarle las últimas estadísticas.
+    if (kickWSInstances.has(channel)) {
+      console.log(`[${channel}] El cliente se ha reconectado al canal. Enviando confirmación y estado actual.`);
+      socket.emit('channel_connected', { channel });
+      const stats = channelStats.get(channel);
+      if (stats) {
+        calculateStats(stats);
+        socket.emit('stats_update', formatStats(stats));
+      }
+      socket.join(`channel_${channel}`);
+      return;
+    }
+
+    // Si no, iniciar el proceso de conexión normal.
     connectToChannel(channel);
     socket.join(`channel_${channel}`);
-    socket.emit('connected_to_channel', { channel });
   });
 
   socket.on('get_stats', (data: { channel: string }) => {
@@ -627,3 +644,37 @@ const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
   console.log(`🚀 Servidor ejecutándose en puerto ${PORT}`);
 });
+// Initialize database and start daily save interval
+(async () => {
+  await initializeDatabase();
+
+  // Save daily stats every 5 minutes (adjust as needed)
+  dailySaveInterval = setInterval(() => {
+    const today = new Date().toISOString().split('T')[0];
+    channelStats.forEach(async (stats) => {
+      calculateStats(stats);
+      await saveDailyStats(stats);
+    });
+  }, 5 * 60 * 1000); // Every 5 minutes
+
+  // Add a route to get historical data
+  app.get('/history/:channel/:date', async (req, res) => {
+    const { channel, date } = req.params;
+    try {
+      const stats = await getDailyStatsForDate(date, channel.toLowerCase());
+      if (stats) {
+        res.json(stats);
+      } else {
+        res.status(404).json({ error: 'No hay datos para esta fecha y canal.' });
+      }
+    } catch (error: any) {
+      console.error('Error fetching historical data:', error);
+      res.status(500).json({ error: error.message || 'Error al obtener datos históricos.' });
+    }
+  });
+})();
+} catch (error) {
+  console.error('Error no capturado:', error);
+  // Mantén la consola abierta para ver el error
+  setTimeout(() => {}, 1000 * 60 * 5); // 5 minutos
+}
