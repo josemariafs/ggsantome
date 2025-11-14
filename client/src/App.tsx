@@ -48,7 +48,6 @@ const App = () => {
 
     newSocket.on('connect', () => setConnected(true));
     newSocket.on('disconnect', () => setConnected(false));
-    newSocket.on('stats_update', (data) => setLiveStats(data));
     
     newSocket.on('channel_connected', () => {
       setIsLoading(false);
@@ -60,8 +59,28 @@ const App = () => {
       setIsLoading(false);
     });
 
-    return () => newSocket.disconnect();
+    return () => {
+        newSocket.disconnect();
+    };
   }, []);
+
+  // Efecto para escuchar actualizaciones de stats
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleStatsUpdate = (data: Stats) => {
+      // Solo actualizar si el canal es el que está seleccionado
+      if (data.channelName.toLowerCase() === selectedChannel.toLowerCase()) {
+        setLiveStats(data);
+      }
+    };
+
+    socket.on('stats_update', handleStatsUpdate);
+
+    return () => {
+      socket.off('stats_update', handleStatsUpdate);
+    };
+  }, [socket, selectedChannel]);
 
   // Efecto para conectar al canal y buscar datos
   useEffect(() => {
@@ -79,6 +98,13 @@ const App = () => {
     } else {
       fetchHistoricalData(selectedChannel, selectedDate);
     }
+    
+    // Función de limpieza para desconectar del canal anterior
+    return () => {
+        if(isRealTime) {
+            socket.emit('disconnect_channel', { channel: selectedChannel });
+        }
+    };
   }, [socket, selectedChannel, selectedDate]);
 
   const fetchHistoricalData = async (channel: string, date: string) => {

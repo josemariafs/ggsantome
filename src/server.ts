@@ -582,6 +582,14 @@ io.on('connection', (socket) => {
     socket.join(`channel_${channel}`);
   });
 
+  socket.on('disconnect_channel', (data: { channel: string }) => {
+        const channel = (data.channel || '').toLowerCase();
+        if (channel) {
+            socket.leave(`channel_${channel}`);
+            console.log(`Cliente ${socket.id} ha salido del canal ${channel}`);
+        }
+      });
+
   socket.on('get_stats', (data: { channel: string }) => {
     const channel = data.channel.toLowerCase();
     const stats = channelStats.get(channel);
