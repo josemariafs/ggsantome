@@ -16,10 +16,53 @@ export async function initializeDatabase() {
 
   console.log('Database initialized and connected to kick_stats.db');
 
+  // Check for schema migration
+  const tableInfo = await db.get("SELECT sql FROM sqlite_master WHERE type='table' AND name='daily_stats'");
+  
+  // If table exists and doesn't have the composite unique key, we need to migrate.
+  if (tableInfo && !/UNIQUE\s*\(\s*date\s*,\s*channelName\s*\)/i.test(tableInfo.sql)) {
+      console.log('Old database schema detected. Migrating...');
+      await db.exec('BEGIN TRANSACTION;');
+      try {
+        await db.exec('ALTER TABLE daily_stats RENAME TO daily_stats_old;');
+        // create new table
+        await db.exec(`
+            CREATE TABLE daily_stats (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              date TEXT NOT NULL,
+              channelName TEXT NOT NULL,
+              totalMessages INTEGER,
+              uniqueUsers INTEGER,
+              subscriptions INTEGER,
+              giftedSubscriptions INTEGER,
+              kicks INTEGER,
+              usersBanned INTEGER,
+              hostChannels INTEGER,
+              polls INTEGER,
+              pinnedMessages INTEGER,
+              averageMessageLength REAL,
+              uptime INTEGER,
+              messagesPerMinute INTEGER,
+              UNIQUE(date, channelName)
+            );
+        `);
+        // copy data
+        await db.exec(`INSERT INTO daily_stats (id, date, channelName, totalMessages, uniqueUsers, subscriptions, giftedSubscriptions, kicks, usersBanned, hostChannels, polls, pinnedMessages, averageMessageLength, uptime, messagesPerMinute)
+                     SELECT id, date, channelName, totalMessages, uniqueUsers, subscriptions, giftedSubscriptions, kicks, usersBanned, hostChannels, polls, pinnedMessages, averageMessageLength, uptime, messagesPerMinute FROM daily_stats_old;`);
+        await db.exec('DROP TABLE daily_stats_old;');
+        await db.exec('COMMIT;');
+        console.log('Database migration complete.');
+      } catch (e) {
+        await db.exec('ROLLBACK;');
+        console.error('Database migration failed:', e);
+        throw new Error('Failed to migrate database schema.');
+      }
+  }
+
   await db.exec(`
     CREATE TABLE IF NOT EXISTS daily_stats (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      date TEXT NOT NULL UNIQUE,
+      date TEXT NOT NULL,
       channelName TEXT NOT NULL,
       totalMessages INTEGER,
       uniqueUsers INTEGER,
@@ -32,7 +75,8 @@ export async function initializeDatabase() {
       pinnedMessages INTEGER,
       averageMessageLength REAL,
       uptime INTEGER,
-      messagesPerMinute INTEGER
+      messagesPerMinute INTEGER,
+      UNIQUE(date, channelName)
     );
   `);
   console.log('Daily stats table ensured.');
@@ -65,6 +109,11 @@ export async function saveDailyStats(stats: any) {
     stats.pinnedMessages, stats.averageMessageLength, stats.uptime, stats.messagesPerMinute
   );
   console.log(`Daily stats saved for ${stats.channelName} on ${date}`);
+}
+
+export async function getTodaysStats(channelName: string) {
+  const today = new Date().toISOString().split('T')[0];
+  return getDailyStatsForDate(today, channelName);
 }
 
 export async function getDailyStatsForDate(date: string, channelName: string) {

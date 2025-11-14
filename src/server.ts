@@ -10,7 +10,7 @@ import zlib from 'zlib';
 import puppeteer from 'puppeteer';
 import puppeteerExtra from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import { initializeDatabase, saveDailyStats, getDailyStatsForDate } from './database.js';
+import { initializeDatabase, saveDailyStats, getDailyStatsForDate, getTodaysStats } from './database.js';
 
 try{ 
 // Helper to fetch channel info with proper headers
@@ -275,7 +275,33 @@ const kickWSInstances = new Map<string, KickWebSocket>();
 let updateInterval: NodeJS.Timeout | null = null;
 let dailySaveInterval: NodeJS.Timeout | null = null;
 
-function initializeStats(channelName: string): ChannelStats {
+function initializeStats(channelName: string, dbStats: any = null): ChannelStats {
+  if (dbStats) {
+    console.log(`[${channelName}] Reanudando estadísticas desde la base de datos.`);
+    return {
+      channelName,
+      messageCount: 0, // Se resetea para el cálculo de mensajes por minuto
+      uniqueUsers: new Set(), // No se puede reanudar fácilmente, se empieza de nuevo
+      totalMessages: dbStats.totalMessages || 0,
+      subscriptions: dbStats.subscriptions || 0,
+      giftedSubscriptions: dbStats.giftedSubscriptions || 0,
+      kicks: dbStats.kicks || 0,
+      usersBanned: dbStats.usersBanned || 0,
+      hostChannels: dbStats.hostChannels || 0,
+      polls: dbStats.polls || 0,
+      pinnedMessages: dbStats.pinnedMessages || 0,
+      topUsers: new Map(), // No se puede reanudar fácilmente, se empieza de nuevo
+      messageHistory: [],
+      subscriptionHistory: [],
+      banHistory: [],
+      kicksGiftedHistory: [],
+      startTime: new Date(), // El tiempo de actividad se basa en el reinicio del servidor
+      uptime: dbStats.uptime || 0,
+      messagesPerMinute: dbStats.messagesPerMinute || 0,
+      averageMessageLength: dbStats.averageMessageLength || 0,
+    };
+  }
+
   return {
     channelName,
     messageCount: 0,
@@ -315,12 +341,14 @@ function calculateStats(stats: ChannelStats): void {
     : 0;
 }
 
-function connectToChannel(channelName: string): void {
+async function connectToChannel(channelName: string): Promise<void> {
   if (channelStats.has(channelName)) {
     return; // Already connected
   }
 
-  const stats = initializeStats(channelName);
+  // Cargar estadísticas de hoy si existen
+  const todaysStats = await getTodaysStats(channelName);
+  const stats = initializeStats(channelName, todaysStats);
   channelStats.set(channelName, stats);
 
   const kickWS = new KickWebSocket({
@@ -648,14 +676,13 @@ httpServer.listen(PORT, () => {
 (async () => {
   await initializeDatabase();
 
-  // Save daily stats every 5 minutes (adjust as needed)
+  // Save daily stats every 30 seconds
   dailySaveInterval = setInterval(() => {
-    const today = new Date().toISOString().split('T')[0];
     channelStats.forEach(async (stats) => {
       calculateStats(stats);
       await saveDailyStats(stats);
     });
-  }, 5 * 60 * 1000); // Every 5 minutes
+  }, 30 * 1000); // Every 30 seconds
 
   // Add a route to get historical data
   app.get('/history/:channel/:date', async (req, res) => {
@@ -672,6 +699,23 @@ httpServer.listen(PORT, () => {
       res.status(500).json({ error: error.message || 'Error al obtener datos históricos.' });
     }
   });
+
+  // Graceful shutdown
+  const cleanup = async () => {
+    console.log('Cerrando el servidor y guardando las estadísticas...');
+    if (dailySaveInterval) {
+      clearInterval(dailySaveInterval);
+    }
+    // Guardar todas las estadísticas una última vez
+    for (const stats of channelStats.values()) {
+      calculateStats(stats);
+      await saveDailyStats(stats);
+    }
+    process.exit(0);
+  };
+
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
 })();
 } catch (error) {
   console.error('Error no capturado:', error);

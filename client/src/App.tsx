@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { TrendingUp, Users, MessageSquare, Heart, Gift, Ban, Radio } from 'lucide-react';
+import { TrendingUp, Users, MessageSquare, Heart, Gift, Ban } from 'lucide-react';
 import StatCard from './components/StatCard';
 import RecentActivity from './components/RecentActivity';
 import TopUsers from './components/TopUsers';
 import GiftedSubscriptionsDetail from './components/GiftedSubscriptionsDetail';
 import ChannelSelector from './components/ChannelSelector';
+import logo from './assets/logo.png';
 
 // Define la interfaz de Stats fuera del componente
 interface Stats {
@@ -103,16 +104,14 @@ const App = () => {
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-900 to-pink-900 shadow-lg">
+      <div className="bg-gradient-to-r from-blue-900 to-sky-700 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center">
-                <Radio className="w-6 h-6 text-purple-600" />
-              </div>
+              <img src={logo} alt="Logo" className="h-24" />
               <div>
                 <h1 className="text-4xl font-bold">Kick Dashboard</h1>
-                <p className="text-purple-200">Estadísticas {isRealTime ? 'en Tiempo Real' : `del ${selectedDate}`}</p>
+                <p className="text-blue-200">Estadísticas {isRealTime ? 'en Tiempo Real' : `del ${selectedDate}`}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -144,7 +143,7 @@ const App = () => {
                 />
                 <button
                   onClick={() => setSelectedChannel('')}
-                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-sky-600 rounded-lg font-semibold hover:from-blue-700 hover:to-sky-700 transition-all transform hover:scale-105 active:scale-95"
                 >
                   Cambiar canal
                 </button>

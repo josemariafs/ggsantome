@@ -8,15 +8,10 @@ const RecentActivity = ({ title, items, icon }: RecentActivityProps) => {
   const formatTimestamp = (timestamp: string) => {
     try {
       const date = new Date(timestamp);
-      const now = new Date();
-      const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
-      
-      if (diff < 60) return 'Hace un momento';
-      if (diff < 3600) return `Hace ${Math.floor(diff / 60)} min`;
-      if (diff < 86400) return `Hace ${Math.floor(diff / 3600)} h`;
-      return date.toLocaleDateString();
+      // Formatear a HH:mm
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch {
-      return 'Hace un momento';
+      return '--:--';
     }
   };
 

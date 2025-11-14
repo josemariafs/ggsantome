@@ -39,7 +39,7 @@ const ChannelSelector = ({ onSelectChannel, connectionError }: ChannelSelectorPr
                   type="text"
                   value={channel}
                   onChange={(e) => setChannel(e.target.value)}
-                  placeholder="ej: xqc, valkyrae, pokimane"
+                  placeholder="ej: xqc, ggsantome, pokimane"
                   className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-purple-500 transition-colors"
                 />
                 <Search className="absolute right-3 top-3 w-5 h-5 text-gray-500" />
@@ -62,7 +62,7 @@ const ChannelSelector = ({ onSelectChannel, connectionError }: ChannelSelectorPr
 
             <button
               type="submit"
-              className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg font-semibold hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105 active:scale-95"
+              className="w-full py-3 bg-gradient-to-r from-blue-600 to-sky-600 rounded-lg font-semibold hover:from-blue-700 hover:to-sky-700 transition-all transform hover:scale-105 active:scale-95"
             >
               Conectar al Canal
             </button>
@@ -71,7 +71,7 @@ const ChannelSelector = ({ onSelectChannel, connectionError }: ChannelSelectorPr
           <div className="mt-8 pt-8 border-t border-gray-800">
             <h3 className="text-sm font-semibold text-gray-300 mb-3">Canales Populares (Prueba Estos)</h3>
             <div className="grid grid-cols-2 gap-2">
-              {['xqc', 'valkyrae', 'pokimane', 'sykkuno'].map((ch) => (
+              {['xqc', 'ggsantome', 'pokimane', 'sykkuno'].map((ch) => (
                 <button
                   key={ch}
                   onClick={() => {
