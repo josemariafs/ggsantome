@@ -42,5 +42,5 @@ function doFetch(channel){
 (async()=>{
   await doFetch('xqc');
   await doFetch('spreen');
-  await doFetch('valkyrae');
+  await doFetch('ggsantome');
 })();

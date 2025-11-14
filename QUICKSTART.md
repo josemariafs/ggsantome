@@ -38,7 +38,7 @@ http://localhost:5173
 
 ## 🎯 Usar el Dashboard
 
-1. **Ingresa nombre del canal**: `xqc`, `valkyrae`, `pokimane`, etc.
+1. **Ingresa nombre del canal**: `xqc`, `ggsantome`, `pokimane`, etc.
 2. **Haz clic en "Conectar al Canal"**
 3. **¡Espera 2-3 segundos** a que se conecte
 4. **¡Disfruta las estadísticas en tiempo real!** 📊

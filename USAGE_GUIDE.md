@@ -37,7 +37,7 @@ npm run dev
 
 1. Abre el navegador en `http://localhost:5173`
 2. Verás la pantalla de selección de canal
-3. Ingresa el nombre del canal (ej: `xqc`, `valkyrae`, `pokimane`)
+3. Ingresa el nombre del canal (ej: `xqc`, `ggsantome`, `pokimane`)
 4. O haz clic en uno de los canales populares sugeridos
 5. Haz clic en "Conectar al Canal"
 

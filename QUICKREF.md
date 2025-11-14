@@ -20,7 +20,7 @@ Respuesta: `{"status":"ok","channels":1}`
 ```bash
 curl http://localhost:3000/channels
 ```
-Respuesta: `{"channels":["xqc","valkyrae"]}`
+Respuesta: `{"channels":["xqc","ggsantome"]}`
 
 ### GET /stats/:channel
 ```bash

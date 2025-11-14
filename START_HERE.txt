@@ -199,7 +199,7 @@
   → http://localhost:5173
 
   PASO 4: Selecciona un canal
-  → Ej: "xqc", "valkyrae", "pokimane"
+  → Ej: "xqc", "ggsantome", "pokimane"
 
   PASO 5: ¡Disfruta! 🎉
 
