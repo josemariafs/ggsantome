@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { TrendingUp, Users, MessageSquare, Heart, Gift, Ban } from 'lucide-react';
+import { MessageSquare, Users, Ban, Heart, TrendingUp, Gift } from 'lucide-react';
+import logo from './assets/logo.png';
+import ChannelSelector from './components/ChannelSelector';
+import Giveaway from './components/Giveaway';
 import StatCard from './components/StatCard';
 import RecentActivity from './components/RecentActivity';
-import TopUsers from './components/TopUsers';
 import GiftedSubscriptionsDetail from './components/GiftedSubscriptionsDetail';
-import ChannelSelector from './components/ChannelSelector';
-import logo from './assets/logo.png';
+import TopUsers from './components/TopUsers';
 
-// Define la interfaz de Stats fuera del componente
 interface Stats {
   channelName: string;
   totalMessages: number;
@@ -17,16 +17,22 @@ interface Stats {
   giftedSubscriptions: number;
   kicks: number;
   usersBanned: number;
+  hostChannels: number;
+  polls: number;
+  pinnedMessages: number;
+  topUsers: { username: string; count: number }[];
   uptime: number;
   messagesPerMinute: number;
-  // Propiedades que solo existen en tiempo real y son opcionales
-  topUsers?: Array<{ username: string; count: number }>;
-  messageHistory?: Array<{ username: string; message: string; timestamp: string }>;
-  subscriptionHistory?: Array<{ username: string; type: string; timestamp: string }>;
-  kicksGiftedHistory?: Array<{ from: string; amount: number; timestamp: string }>;
+  averageMessageLength: number;
+  messageHistory: { username: string; message: string; timestamp: string }[];
+  subscriptionHistory: { username: string; type: string; timestamp: string }[];
+  banHistory: { username: string; timestamp: string }[];
+  kicksGiftedHistory: { from: string; amount: number; timestamp: string }[];
 }
 
-const getTodayDateString = () => new Date().toISOString().split('T')[0];
+const getTodayDateString = () => {
+  return new Date().toISOString().split('T')[0];
+};
 
 const App = () => {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -48,26 +54,26 @@ const App = () => {
 
     newSocket.on('connect', () => setConnected(true));
     newSocket.on('disconnect', () => setConnected(false));
-    
+
     newSocket.on('channel_connected', () => {
       setIsLoading(false);
       setError('');
     });
-    
+
     newSocket.on('channel_error', (data) => {
       setError(data.error || 'Error desconocido');
       setIsLoading(false);
     });
 
     return () => {
-        newSocket.disconnect();
+      newSocket.disconnect();
     };
   }, []);
 
   // Efecto para escuchar actualizaciones de stats
   useEffect(() => {
     if (!socket) return;
-    
+
     const handleStatsUpdate = (data: Stats) => {
       // Solo actualizar si el canal es el que está seleccionado
       if (data.channelName.toLowerCase() === selectedChannel.toLowerCase()) {
@@ -98,12 +104,12 @@ const App = () => {
     } else {
       fetchHistoricalData(selectedChannel, selectedDate);
     }
-    
+
     // Función de limpieza para desconectar del canal anterior
     return () => {
-        if(isRealTime) {
-            socket.emit('disconnect_channel', { channel: selectedChannel });
-        }
+      if (isRealTime) {
+        socket.emit('disconnect_channel', { channel: selectedChannel });
+      }
     };
   }, [socket, selectedChannel, selectedDate]);
 
@@ -178,6 +184,11 @@ const App = () => {
 
             {isLoading && <div className="text-center py-16"><p className="text-xl text-gray-400">Cargando datos para {selectedChannel}...</p></div>}
             {error && <div className="text-center py-16"><p className="text-xl text-red-400">{error}</p></div>}
+
+            {/* Giveaway Section */}
+            {isRealTime && !isLoading && !error && (
+              <Giveaway socket={socket} channel={selectedChannel} />
+            )}
 
             {displayStats && !isLoading && !error && (
               <>
